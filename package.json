@@ -2,6 +2,18 @@
   "name": "bells-inscriber",
   "module": "index.ts",
   "type": "module",
+  "description": "Browser inscriber",
+  "scripts": {
+    "build": "rm -rf lib && tsc"
+  },
+  "homepage": "https://github.com/Nintondo/bells-inscriber#readme",
+  "bugs": {
+    "url": "https://github.com/Nintondo/bells-inscriber/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nintondo/bells-inscriber.git"
+  },
   "dependencies": {
     "@noble/hashes": "^1.3.3",
     "belcoinjs-lib": "^0.0.4"
@@ -11,5 +23,17 @@
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
-  }
+  },
+  "author": "Kirill",
+  "license": "ISC",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "/lib"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "version": "0.0.1"
 }

@@ -1,22 +1,16 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
-    "module": "esnext",
-    "target": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "composite": true,
-    "strict": true,
-    "downlevelIteration": true,
-    "skipLibCheck": true,
-    "jsx": "react-jsx",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "es2016",
+    "noImplicitAny": false,
+    "outDir": "./lib",
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "declaration": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowJs": true,
-    "types": [
-      "bun-types" // add Bun global
-    ]
-  }
+    "baseUrl": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["./node_modules"]
 }

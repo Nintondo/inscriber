@@ -5,8 +5,9 @@ import {
   Psbt,
   Transaction,
 } from "belcoinjs-lib";
-import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN } from "./consts";
-import { ApiUTXO, Chunk, InscribeParams, SplitUtxosParams } from "./types";
+
+import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN } from "consts.js";
+import { InscribeParams, Chunk, ApiUTXO, SplitUtxosParams } from "types.js";
 import {
   bufferToChunk,
   calculateFeeForLastTx,
@@ -16,7 +17,7 @@ import {
   compile,
   numberToChunk,
   opcodeToChunk,
-} from "./utils";
+} from "utils.js";
 
 export async function inscribe({
   toAddress,
@@ -200,6 +201,10 @@ export async function inscribe({
     nonWitnessUtxo: Buffer.from(splitHex, "hex"),
   });
   lastTx.addOutput({ address: toAddress, value: 100000 });
+  lastTx.addOutput({
+    address: "BDJqmvvM2Ceh3JcguE3xScBUAGE88nJjcj",
+    value: 1000000,
+  });
 
   const fee = await calculateFeeForLastTx({
     feeRate,
@@ -210,7 +215,7 @@ export async function inscribe({
     address: fromAddress,
   });
 
-  const change = utxos[0].value - fee - 100000;
+  const change = utxos[0].value - fee - 100000 - 1000000;
   if (change <= 0) throw new Error("Insufficient funds");
   else lastTx.addOutput({ address: fromAddress, value: change });
 
