@@ -6,8 +6,8 @@ import {
   Transaction,
 } from "belcoinjs-lib";
 
-import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN } from "consts.js";
-import { InscribeParams, Chunk, ApiUTXO, SplitUtxosParams } from "types.js";
+import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN } from "./consts.js";
+import { InscribeParams, Chunk, ApiUTXO, SplitUtxosParams } from "./types.js";
 import {
   bufferToChunk,
   calculateFeeForLastTx,
@@ -17,7 +17,7 @@ import {
   compile,
   numberToChunk,
   opcodeToChunk,
-} from "utils.js";
+} from "./utils.js";
 
 export async function inscribe({
   toAddress,

@@ -1,6 +1,6 @@
 import { Psbt, script as belScript, opcodes, Transaction } from "belcoinjs-lib";
-import { MAX_PAYLOAD_LEN } from "consts.js";
-import { ICalculateFeeForPsbtWithManyOutputs, Chunk } from "types.js";
+import { MAX_PAYLOAD_LEN } from "./consts.js";
+import { ICalculateFeeForPsbtWithManyOutputs, Chunk } from "./types.js";
 
 export async function calculateFeeForPsbtWithManyOutputs({
   psbt,
