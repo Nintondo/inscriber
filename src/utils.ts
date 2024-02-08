@@ -16,7 +16,7 @@ export async function calculateFeeForPsbtWithManyOutputs({
     });
   }
 
-  psbt = Psbt.fromHex(await signPsbtHex(psbt.toHex())!);
+  psbt = Psbt.fromHex((await signPsbtHex(psbt.toHex())).psbtHex!);
   psbt.finalizeAllInputs();
   let txSize = psbt.extractTransaction(true).toBuffer().length;
   const fee = Math.ceil(txSize * feeRate);
@@ -25,7 +25,9 @@ export async function calculateFeeForPsbtWithManyOutputs({
 
 export async function calculateFeeForPsbt(
   psbt: Psbt,
-  signPsbtHex: (psbtHex: string) => Promise<string>,
+  signPsbtHex: (
+    psbtHex: string
+  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>,
   finalizeMethod: (psbt: Psbt) => void,
   feeRate: number,
   address: string
@@ -34,7 +36,7 @@ export async function calculateFeeForPsbt(
     address: address,
     value: 0,
   });
-  psbt = Psbt.fromHex(await signPsbtHex(psbt.toHex())!);
+  psbt = Psbt.fromHex((await signPsbtHex(psbt.toHex())).psbtHex!);
   finalizeMethod(psbt);
   let txSize = psbt.extractTransaction(true).toBuffer().length;
   const fee = Math.ceil(txSize * feeRate);
@@ -51,7 +53,9 @@ export async function calculateFeeForLastTx({
 }: {
   psbt: Psbt;
   feeRate: number;
-  signPsbtHex: (psbtHex: string) => Promise<string>;
+  signPsbtHex: (
+    psbtHex: string
+  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
   lastPartial: Buffer[];
   lastLock: Buffer;
   address: string;
@@ -60,8 +64,9 @@ export async function calculateFeeForLastTx({
     address: address,
     value: 0,
   });
-  psbt = Psbt.fromHex(await signPsbtHex(psbt.toHex())!);
-  const signature = psbt.data.inputs[0].partialSig![0].signature;
+  const { psbtHex, signatures } = await signPsbtHex(psbt.toHex());
+  psbt = Psbt.fromHex(psbtHex);
+  const signature = Buffer.from(signatures[0], "hex");
   const signatureWithHashType = Buffer.concat([
     signature,
     belScript.number.encode(Transaction.SIGHASH_ALL),

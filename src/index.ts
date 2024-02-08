@@ -153,10 +153,11 @@ export async function inscribe({
 
     utxos.shift();
 
-    tx = Psbt.fromHex(await signPsbtHex(tx.toHex())!);
+    const { psbtHex, signatures } = await signPsbtHex(tx.toHex());
+    tx = Psbt.fromHex(psbtHex);
 
     if (p2shInput !== undefined) {
-      const signature = tx.data.inputs[0].partialSig![0].signature;
+      const signature = Buffer.from(signatures[0], "hex");
 
       const unlockScript = compile([
         ...lastPartial,
@@ -219,9 +220,10 @@ export async function inscribe({
   if (change <= 0) throw new Error("Insufficient funds");
   else lastTx.addOutput({ address: fromAddress, value: change });
 
-  lastTx = Psbt.fromHex(await signPsbtHex(lastTx.toHex())!);
+  const { psbtHex, signatures } = await signPsbtHex(lastTx.toHex());
+  lastTx = Psbt.fromHex(psbtHex);
 
-  const signature = lastTx.data.inputs[0].partialSig![0].signature;
+  const signature = Buffer.from(signatures[0], "hex");
 
   const unlockScript = compile([
     ...lastPartial,
@@ -279,7 +281,7 @@ export async function splitUtxos({
     });
   }
 
-  psbt = Psbt.fromHex(await signPsbtHex(psbt.toHex())!);
+  psbt = Psbt.fromHex((await signPsbtHex(psbt.toHex())).psbtHex!);
   psbt.finalizeAllInputs();
   return psbt.extractTransaction(true).toHex();
 }

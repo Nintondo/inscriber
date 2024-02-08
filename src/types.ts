@@ -20,7 +20,9 @@ export interface ICalculateFeeForPsbtWithManyOutputs {
   outputAmount: number;
   feeRate: number;
   address: string;
-  signPsbtHex: (psbtHex: string) => Promise<string>;
+  signPsbtHex: (
+    psbtHex: string
+  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
 }
 
 export interface Chunk {
@@ -37,13 +39,17 @@ export interface InscribeParams {
   feeRate: number;
   inputData: InputData;
   publicKey: Buffer;
-  signPsbtHex: (psbtHex: string) => Promise<string>;
+  signPsbtHex: (
+    psbtHex: string
+  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
 }
 
 export interface SplitUtxosParams {
   feeRate: number;
   count: number;
-  signPsbtHex: (psbtHex: string) => Promise<string>;
+  signPsbtHex: (
+    psbtHex: string
+  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
   address: string;
   inputData: InputData;
 }
