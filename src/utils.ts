@@ -1,27 +1,6 @@
 import { Psbt, script as belScript, opcodes, Transaction } from "belcoinjs-lib";
 import { MAX_PAYLOAD_LEN } from "./consts.js";
-import { ICalculateFeeForPsbtWithManyOutputs, Chunk } from "./types.js";
-
-export async function calculateFeeForPsbtWithManyOutputs({
-  psbt,
-  outputAmount,
-  feeRate,
-  address,
-  signPsbtHex,
-}: ICalculateFeeForPsbtWithManyOutputs): Promise<number> {
-  for (let i = 0; i < outputAmount; i++) {
-    psbt.addOutput({
-      address: address,
-      value: 0,
-    });
-  }
-
-  psbt = Psbt.fromHex((await signPsbtHex(psbt.toHex())).psbtHex!);
-  psbt.finalizeAllInputs();
-  let txSize = psbt.extractTransaction(true).toBuffer().length;
-  const fee = Math.ceil(txSize * feeRate);
-  return fee;
-}
+import { Chunk } from "./types.js";
 
 export async function calculateFeeForPsbt(
   psbt: Psbt,
@@ -187,30 +166,6 @@ export function TransactionNumber(inscription: Chunk[]): number {
       inscription.unshift(partial.pop()!);
       inscription.unshift(partial.pop()!);
     }
-  }
-  return txs.length + 1;
-}
-
-export function calculateTransactionNumber(inscription: Chunk[]): number {
-  const txs = [];
-  while (inscription.length) {
-    let partial: Chunk[] = [];
-
-    if (txs.length == 0) {
-      partial.push(inscription.shift()!);
-    }
-
-    while (compile(partial).length <= 1500 && inscription.length) {
-      partial.push(inscription.shift()!);
-      partial.push(inscription.shift()!);
-    }
-
-    if (compile(partial).length > 1500) {
-      inscription.unshift(partial.pop()!);
-      inscription.unshift(partial.pop()!);
-    }
-
-    txs.push(partial);
   }
   return txs.length + 1;
 }
