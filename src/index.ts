@@ -97,8 +97,8 @@ export async function inscribe({
         sequence: 0xfffffffe,
         nonWitnessUtxo: Buffer.from(availableUtxos[0].rawHex, "hex"),
       });
-      availableUtxos.shift();
       usedUtxos.push(availableUtxos[0]);
+      availableUtxos.shift();
 
       let fee = 0;
 
@@ -127,9 +127,10 @@ export async function inscribe({
         usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
         fee -
         100000;
-      if (change <= 0 && availableUtxos.length <= 1)
+      if (change <= 0 && availableUtxos.length < 1)
         throw new Error("Insufficient funds");
-      else tx.addOutput({ address: fromAddress, value: change });
+      else if (change > 0)
+        tx.addOutput({ address: fromAddress, value: change });
     }
 
     utxos.splice(0, usedUtxos.length);
@@ -194,8 +195,8 @@ export async function inscribe({
       sequence: 0xfffffffe,
       nonWitnessUtxo: Buffer.from(availableUtxos[0].rawHex, "hex"),
     });
-    availableUtxos.shift();
     usedUtxos.push(availableUtxos[0]);
+    availableUtxos.shift();
 
     const fee = await calculateFeeForLastTx({
       feeRate,
@@ -211,9 +212,10 @@ export async function inscribe({
       fee -
       100000 -
       1000000;
-    if (change <= 0 && availableUtxos.length <= 1)
+    if (change <= 0 && availableUtxos.length < 1)
       throw new Error("Insufficient funds");
-    else lastTx.addOutput({ address: fromAddress, value: change });
+    else if (change > 0)
+      lastTx.addOutput({ address: fromAddress, value: change });
   }
 
   const { psbtHex, signatures } = await signPsbtHex(lastTx.toHex());
