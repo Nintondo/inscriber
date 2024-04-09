@@ -1,6 +1,6 @@
 import { opcodes, crypto as belCrypto, networks, Psbt } from "belcoinjs-lib";
 
-import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN } from "./consts.js";
+import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN, UTXO_MIN_VALUE } from "./consts.js";
 import { InscribeParams, Chunk, ApiUTXO } from "./types.js";
 import {
   bufferToChunk,
@@ -78,7 +78,7 @@ export async function inscribe({
 
     const p2shOutput = {
       script: p2shScript,
-      value: 100000,
+      value: UTXO_MIN_VALUE,
     };
 
     let tx = new Psbt({ network: networks.bitcoin });
@@ -126,7 +126,7 @@ export async function inscribe({
       change =
         usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
         fee -
-        100000;
+        UTXO_MIN_VALUE;
       if (change <= 0 && availableUtxos.length < 1)
         throw new Error("Insufficient funds");
       else if (change > 0)
@@ -179,7 +179,7 @@ export async function inscribe({
   let lastTx = new Psbt({ network: networks.bitcoin });
   lastTx.setVersion(1);
   lastTx.addInput(p2shInput);
-  lastTx.addOutput({ address: toAddress, value: 100000 });
+  lastTx.addOutput({ address: toAddress, value: UTXO_MIN_VALUE });
   lastTx.addOutput({
     address: "BDJqmvvM2Ceh3JcguE3xScBUAGE88nJjcj",
     value: 1000000,
@@ -210,7 +210,7 @@ export async function inscribe({
     change =
       usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
       fee -
-      100000 -
+      UTXO_MIN_VALUE -
       1000000;
     if (change <= 0 && availableUtxos.length < 1)
       throw new Error("Insufficient funds");
