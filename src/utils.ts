@@ -2,73 +2,6 @@ import { Psbt, script as belScript, opcodes, Transaction } from "belcoinjs-lib";
 import { MAX_PAYLOAD_LEN } from "./consts.js";
 import { Chunk } from "./types.js";
 
-export async function calculateFeeForPsbt(
-  psbt: Psbt,
-  signPsbtHex: (
-    psbtHex: string
-  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>,
-  finalizeMethod: (psbt: Psbt) => void,
-  feeRate: number,
-  address: string
-): Promise<number> {
-  psbt.addOutput({
-    address: address,
-    value: 0,
-  });
-  psbt = Psbt.fromHex((await signPsbtHex(psbt.toHex())).psbtHex!);
-  finalizeMethod(psbt);
-  let txSize = psbt.extractTransaction(true).toBuffer().length;
-  const fee = Math.ceil(txSize * feeRate);
-  return fee;
-}
-
-export async function calculateFeeForLastTx({
-  psbt,
-  feeRate,
-  signPsbtHex,
-  lastPartial,
-  lastLock,
-  address,
-}: {
-  psbt: Psbt;
-  feeRate: number;
-  signPsbtHex: (
-    psbtHex: string
-  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
-  lastPartial: Buffer[];
-  lastLock: Buffer;
-  address: string;
-}): Promise<number> {
-  psbt.addOutput({
-    address: address,
-    value: 0,
-  });
-  const { psbtHex, signatures } = await signPsbtHex(psbt.toHex());
-  psbt = Psbt.fromHex(psbtHex);
-  const signature = Buffer.from(signatures[0], "hex");
-  const signatureWithHashType = Buffer.concat([
-    signature,
-    belScript.number.encode(Transaction.SIGHASH_ALL),
-  ]);
-
-  const unlockScript = belScript.compile([
-    ...lastPartial,
-    signatureWithHashType,
-    lastLock,
-  ]);
-
-  psbt.finalizeInput(0, (_: any, input: any, script: any) => {
-    return {
-      finalScriptSig: unlockScript,
-      finalScriptWitness: undefined,
-    };
-  });
-  psbt.finalizeInput(1);
-  let txSize = psbt.extractTransaction(true).toBuffer().length;
-  const fee = Math.ceil(txSize * feeRate);
-  return fee;
-}
-
 export function compile(chunks: Chunk[]) {
   var buffers: Buffer[] = [];
   var bufferLength = 0;
@@ -168,4 +101,20 @@ export function TransactionNumber(inscription: Chunk[]): number {
     }
   }
   return txs.length + 1;
+}
+
+export function gptFeeCalculate(inputCount: number, outputCount: number, feeRate: number) {
+  // Constants defining the weight of each component of a transaction
+  const BASE_TX_WEIGHT = 10 * 4; // 10 vbytes * 4 weight units per vbyte
+  const INPUT_WEIGHT = 148 * 4; // 148 vbytes * 4 weight units per vbyte for each input
+  const OUTPUT_WEIGHT = 34 * 4; // 34 vbytes * 4 weight units per vbyte for each output
+
+  // Calculate the weight of the transaction
+  const transactionWeight =
+    BASE_TX_WEIGHT + inputCount * INPUT_WEIGHT + outputCount * OUTPUT_WEIGHT;
+
+  // Calculate the fee by multiplying transaction weight by fee rate (satoshis per weight unit)
+  const fee = Math.ceil((transactionWeight / 4) * feeRate);
+
+  return fee;
 }

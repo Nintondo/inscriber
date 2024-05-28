@@ -4,9 +4,8 @@ import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN, UTXO_MIN_VALUE } from "./consts.js";
 import { InscribeParams, Chunk, ApiUTXO } from "./types.js";
 import {
   bufferToChunk,
-  calculateFeeForLastTx,
-  calculateFeeForPsbt,
   compile,
+  gptFeeCalculate,
   numberToChunk,
   opcodeToChunk,
 } from "./utils.js";
@@ -103,24 +102,7 @@ export async function inscribe({
       let fee = 0;
 
       if (p2shInput === undefined) {
-        fee = await calculateFeeForPsbt(
-          tx.clone(),
-          signPsbtHex,
-          (psbt) => {
-            return psbt.finalizeAllInputs();
-          },
-          feeRate,
-          fromAddress
-        );
-      } else {
-        fee = await calculateFeeForLastTx({
-          feeRate,
-          signPsbtHex,
-          psbt: tx.clone(),
-          lastPartial,
-          lastLock,
-          address: fromAddress,
-        });
+        fee = gptFeeCalculate(tx.data.inputs.length, tx.data.outputs.length + 1, feeRate)
       }
 
       change =
@@ -198,14 +180,7 @@ export async function inscribe({
     usedUtxos.push(availableUtxos[0]);
     availableUtxos.shift();
 
-    const fee = await calculateFeeForLastTx({
-      feeRate,
-      signPsbtHex,
-      psbt: lastTx.clone(),
-      lastPartial,
-      lastLock,
-      address: fromAddress,
-    });
+    const fee = gptFeeCalculate(lastTx.data.inputs.length, lastTx.data.outputs.length + 1, feeRate);
 
     change =
       usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
