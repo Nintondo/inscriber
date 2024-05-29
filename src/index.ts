@@ -244,7 +244,7 @@ export async function inscribe({
       fee -
       UTXO_MIN_VALUE -
       1000000;
-    if (change <= 0 && availableUtxos.length < 1)
+    if (change < 0 && availableUtxos.length < 1)
       throw new Error("Insufficient funds");
     else if (change > 0)
       lastTx.addOutput({ address: fromAddress, value: change });
