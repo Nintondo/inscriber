@@ -41,6 +41,7 @@ export async function prepareToInscribeMultipleInscriptions({
 
   const change =
     utxos.reduce((acc, val) => (acc += val.value), 0) -
+    signleInscriptionCost * amount -
     gptFeeCalculate(utxos.length, amount + 1, feeRate);
 
   if (change < 1000)
