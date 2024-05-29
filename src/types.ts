@@ -4,7 +4,18 @@ export interface ApiUTXO {
   value: number;
   scriptPubKeyHex?: string;
   redeemScriptHex?: string;
-  rawHex: string;
+  hex: string;
+}
+
+export interface PrepareForMultipleInscriptionsInscribe {
+  signPsbtHex: (
+    psbtHex: string
+  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
+  utxos: ApiUTXO[];
+  feeRate: number;
+  amount: number;
+  signleInscriptionCost: number;
+  address: string;
 }
 
 export interface Status {

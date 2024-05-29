@@ -1,7 +1,12 @@
 import { opcodes, crypto as belCrypto, networks, Psbt } from "belcoinjs-lib";
 
 import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN, UTXO_MIN_VALUE } from "./consts.js";
-import { InscribeParams, Chunk, ApiUTXO } from "./types.js";
+import {
+  InscribeParams,
+  Chunk,
+  ApiUTXO,
+  PrepareForMultipleInscriptionsInscribe,
+} from "./types.js";
 import {
   bufferToChunk,
   compile,
@@ -9,6 +14,49 @@ import {
   numberToChunk,
   opcodeToChunk,
 } from "./utils.js";
+
+export async function prepareToInscribeMultipleInscriptions({
+  signPsbtHex,
+  utxos,
+  feeRate,
+  amount,
+  signleInscriptionCost,
+  address,
+}: PrepareForMultipleInscriptionsInscribe): Promise<string> {
+  const psbt = new Psbt({ network: networks.bitcoin });
+  utxos.forEach((f) => {
+    psbt.addInput({
+      hash: f.txid,
+      index: f.vout,
+      nonWitnessUtxo: Buffer.from(f.hex, "hex"),
+    });
+  });
+
+  for (let i = 0; i < amount; i++) {
+    psbt.addOutput({
+      address: address,
+      value: signleInscriptionCost,
+    });
+  }
+
+  const change =
+    utxos.reduce((acc, val) => (acc += val.value), 0) -
+    gptFeeCalculate(utxos.length, amount + 1, feeRate);
+
+  if (change < 1000)
+    throw new Error("Not enough balance for preparation, fix electrs");
+
+  psbt.addOutput({
+    address,
+    value: change,
+  });
+
+  const { psbtHex } = await signPsbtHex(psbt.toHex());
+  const signedPsbt = Psbt.fromHex(psbtHex);
+  signedPsbt.finalizeAllInputs();
+
+  return signedPsbt.extractTransaction(true).toHex();
+}
 
 export async function inscribe({
   toAddress,
@@ -94,7 +142,7 @@ export async function inscribe({
         hash: availableUtxos[0].txid,
         index: availableUtxos[0].vout,
         sequence: 0xfffffffe,
-        nonWitnessUtxo: Buffer.from(availableUtxos[0].rawHex, "hex"),
+        nonWitnessUtxo: Buffer.from(availableUtxos[0].hex, "hex"),
       });
       usedUtxos.push(availableUtxos[0]);
       availableUtxos.shift();
@@ -102,7 +150,11 @@ export async function inscribe({
       let fee = 0;
 
       if (p2shInput === undefined) {
-        fee = gptFeeCalculate(tx.data.inputs.length, tx.data.outputs.length + 1, feeRate)
+        fee = gptFeeCalculate(
+          tx.data.inputs.length,
+          tx.data.outputs.length + 1,
+          feeRate
+        );
       }
 
       change =
@@ -145,7 +197,7 @@ export async function inscribe({
       txid: tx.extractTransaction(true).getId(),
       vout: 1,
       value: change,
-      rawHex: tx.extractTransaction(true).toHex(),
+      hex: tx.extractTransaction(true).toHex(),
     });
 
     p2shInput = {
@@ -175,12 +227,16 @@ export async function inscribe({
       hash: availableUtxos[0].txid,
       index: availableUtxos[0].vout,
       sequence: 0xfffffffe,
-      nonWitnessUtxo: Buffer.from(availableUtxos[0].rawHex, "hex"),
+      nonWitnessUtxo: Buffer.from(availableUtxos[0].hex, "hex"),
     });
     usedUtxos.push(availableUtxos[0]);
     availableUtxos.shift();
 
-    const fee = gptFeeCalculate(lastTx.data.inputs.length, lastTx.data.outputs.length + 1, feeRate);
+    const fee = gptFeeCalculate(
+      lastTx.data.inputs.length,
+      lastTx.data.outputs.length + 1,
+      feeRate
+    );
 
     change =
       usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
