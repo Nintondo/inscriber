@@ -162,7 +162,7 @@ export async function inscribe({
         usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
         fee -
         UTXO_MIN_VALUE;
-      if (change <= 0 && availableUtxos.length < 1)
+      if (change < 0 && availableUtxos.length < 1)
         throw new Error("Insufficient funds");
       else if (change > 0)
         tx.addOutput({ address: fromAddress, value: change });
