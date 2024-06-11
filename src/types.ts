@@ -1,3 +1,5 @@
+import { Network } from "belcoinjs-lib";
+
 export interface ApiUTXO {
   txid: string;
   vout: number;
@@ -16,6 +18,7 @@ export interface PrepareForMultipleInscriptionsInscribe {
   amount: number;
   signleInscriptionCost: number;
   address: string;
+  network: Network;
 }
 
 export interface Status {
@@ -37,6 +40,7 @@ export interface InscribeParams {
   contentType: string;
   data: Buffer;
   feeRate: number;
+  network: Network;
   utxos: ApiUTXO[];
   publicKey: Buffer;
   signPsbtHex: (

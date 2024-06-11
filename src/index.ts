@@ -22,8 +22,9 @@ export async function prepareToInscribeMultipleInscriptions({
   amount,
   signleInscriptionCost,
   address,
+  network,
 }: PrepareForMultipleInscriptionsInscribe): Promise<string> {
-  const psbt = new Psbt({ network: networks.bitcoin });
+  const psbt = new Psbt({ network });
   utxos.forEach((f) => {
     psbt.addInput({
       hash: f.txid,
@@ -67,6 +68,7 @@ export async function inscribe({
   utxos,
   publicKey,
   signPsbtHex,
+  network,
   fromAddress,
 }: InscribeParams): Promise<string[]> {
   let parts = [];
@@ -129,7 +131,7 @@ export async function inscribe({
       value: UTXO_MIN_VALUE,
     };
 
-    let tx = new Psbt({ network: networks.bitcoin });
+    let tx = new Psbt({ network });
     tx.setVersion(1);
 
     if (p2shInput) tx.addInput(p2shInput);
@@ -211,7 +213,7 @@ export async function inscribe({
     lastLock = lock;
   }
 
-  let lastTx = new Psbt({ network: networks.bitcoin });
+  let lastTx = new Psbt({ network });
   lastTx.setVersion(1);
   lastTx.addInput(p2shInput);
   lastTx.addOutput({ address: toAddress, value: UTXO_MIN_VALUE });
