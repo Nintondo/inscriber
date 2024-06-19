@@ -218,7 +218,11 @@ export async function inscribe({
   lastTx.addInput(p2shInput);
   lastTx.addOutput({ address: toAddress, value: UTXO_MIN_VALUE });
   lastTx.addOutput({
-    address: "BDJqmvvM2Ceh3JcguE3xScBUAGE88nJjcj",
+    address:
+      network.pubKeyHash === networks.testnet.pubKeyHash &&
+      network.scriptHash === networks.testnet.scriptHash
+        ? "EMJCKGLb6qapq2kcgNHgcbkwmSYFkMvcVt"
+        : "BDJqmvvM2Ceh3JcguE3xScBUAGE88nJjcj",
     value: 1000000,
   });
 
