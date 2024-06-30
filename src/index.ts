@@ -139,7 +139,7 @@ export async function inscribe({
 
     let change = 0;
     const usedUtxos: ApiUTXO[] = [];
-    const availableUtxos = utxos;
+    const availableUtxos = [...utxos];
     while (change <= 0 && availableUtxos.length > 0) {
       tx.addInput({
         hash: availableUtxos[0].txid,
@@ -190,7 +190,9 @@ export async function inscribe({
           finalScriptWitness: undefined,
         };
       });
-      tx.finalizeInput(1);
+      tx.data.inputs.forEach((_, idx) => {
+        if (idx) tx.finalizeInput(idx);
+      });
     } else tx.finalizeAllInputs();
 
     const transaction = tx.extractTransaction(true);
@@ -228,7 +230,7 @@ export async function inscribe({
 
   let change = 0;
   const usedUtxos: ApiUTXO[] = [];
-  const availableUtxos = utxos;
+  const availableUtxos = [...utxos];
   while (change <= 0 && availableUtxos.length > 0) {
     lastTx.addInput({
       hash: availableUtxos[0].txid,
@@ -273,7 +275,9 @@ export async function inscribe({
       finalScriptWitness: undefined,
     };
   });
-  lastTx.finalizeInput(1);
+  lastTx.data.inputs.forEach((_, idx) => {
+    if (idx) lastTx.finalizeInput(idx);
+  });
 
   const finalizedTx = lastTx.extractTransaction(true);
   txs.push(finalizedTx.toHex());
