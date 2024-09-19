@@ -1,63 +1,61 @@
-import { opcodes, crypto as belCrypto, networks, Psbt } from "belcoinjs-lib";
-
-import { MAX_CHUNK_LEN, MAX_PAYLOAD_LEN, UTXO_MIN_VALUE } from "./consts.js";
 import {
-  InscribeParams,
-  Chunk,
-  ApiUTXO,
-  PrepareForMultipleInscriptionsInscribe,
-} from "./types.js";
-import {
-  bufferToChunk,
-  compile,
-  gptFeeCalculate,
-  numberToChunk,
-  opcodeToChunk,
-} from "./utils.js";
+  script as bscript,
+  Network,
+  networks,
+  payments,
+  Psbt,
+} from "belcoinjs-lib";
 
-export async function prepareToInscribeMultipleInscriptions({
-  signPsbtHex,
-  utxos,
-  feeRate,
-  amount,
-  signleInscriptionCost,
-  address,
-  network,
-}: PrepareForMultipleInscriptionsInscribe): Promise<string> {
+import { MAX_CHUNK_LEN, UTXO_MIN_VALUE } from "./consts.js";
+import { InscribeParams } from "./types.js";
+import { getAddressType, getWintessUtxo, toXOnly } from "./utils.js";
+
+async function calcFeeForFundPsbt(
+  psbt: Psbt,
+  feeRate: number,
+  signPsbt: (psbtBase64: string) => Promise<string>
+) {
+  psbt.addOutput({ address: psbt.txOutputs[0].address, value: 0 });
+  const signedPsbt = Psbt.fromBase64(await signPsbt(psbt.toBase64()));
+  const virtualSize = signedPsbt.extractTransaction(true).virtualSize();
+
+  return virtualSize * feeRate;
+}
+
+async function calcFeeForRevealPsbt(
+  payment: payments.Payment,
+  feeRate: number,
+  address: string,
+  xOnlyPubKey: Buffer,
+  signPsbt: (
+    psbtBase64: string,
+    disableTweakSigner?: boolean
+  ) => Promise<string>,
+  network: Network
+) {
   const psbt = new Psbt({ network });
-  utxos.forEach((f) => {
-    psbt.addInput({
-      hash: f.txid,
-      index: f.vout,
-      nonWitnessUtxo: Buffer.from(f.hex, "hex"),
-    });
+  psbt.addInput({
+    hash: Buffer.alloc(32),
+    index: 0,
+    tapInternalKey: xOnlyPubKey,
+    witnessUtxo: {
+      script: payment.output!,
+      value: UTXO_MIN_VALUE + 100,
+    },
+    tapLeafScript: [
+      {
+        leafVersion: payment.redeem!.redeemVersion!,
+        script: payment.redeem!.output!,
+        controlBlock: payment.witness![payment.witness!.length - 1],
+      },
+    ],
   });
+  psbt.addOutput({ address, value: UTXO_MIN_VALUE });
 
-  for (let i = 0; i < amount; i++) {
-    psbt.addOutput({
-      address: address,
-      value: signleInscriptionCost,
-    });
-  }
+  const signedPsbt = Psbt.fromBase64(await signPsbt(psbt.toBase64(), true));
+  const virtualSize = signedPsbt.extractTransaction(true).virtualSize();
 
-  const change =
-    utxos.reduce((acc, val) => (acc += val.value), 0) -
-    signleInscriptionCost * amount -
-    gptFeeCalculate(utxos.length, amount + 1, feeRate);
-
-  if (change < 1000)
-    throw new Error("Not enough balance for preparation, fix electrs");
-
-  psbt.addOutput({
-    address,
-    value: change,
-  });
-
-  const { psbtHex } = await signPsbtHex(psbt.toHex());
-  const signedPsbt = Psbt.fromHex(psbtHex);
-  signedPsbt.finalizeAllInputs();
-
-  return signedPsbt.extractTransaction(true).toHex();
+  return virtualSize * feeRate;
 }
 
 export async function inscribe({
@@ -65,222 +63,118 @@ export async function inscribe({
   contentType,
   data,
   feeRate,
-  utxos,
+  getUtxos,
   publicKey,
-  signPsbtHex,
+  signPsbt,
   network,
   fromAddress,
 }: InscribeParams): Promise<string[]> {
-  let parts = [];
+  const xOnlyPubKey = toXOnly(publicKey);
+  const addressType = getAddressType(fromAddress, network);
+
   const txs: string[] = [];
 
-  while (data.length) {
-    let part = data.slice(0, Math.min(MAX_CHUNK_LEN, data.length));
-    data = data.slice(part.length);
-    parts.push(part);
-  }
-
-  const inscription: Chunk[] = [
-    bufferToChunk(Buffer.from("ord", "utf8")),
-    numberToChunk(parts.length),
-    bufferToChunk(Buffer.from(contentType, "utf8")),
-    ...parts.flatMap((part, n) => [
-      numberToChunk(parts.length - n - 1),
-      bufferToChunk(part),
-    ]),
+  const scriptChunks = [
+    xOnlyPubKey,
+    bscript.OPS.OP_CHECKSIG,
+    bscript.OPS.OP_FALSE,
+    bscript.OPS.OP_IF,
+    Buffer.from("ord", "utf8"),
+    1,
+    1,
+    Buffer.from(contentType, "utf8"),
+    0,
   ];
 
-  let p2shInput: any | undefined = undefined;
-  let lastLock: any | undefined = undefined;
-  let lastPartial: any | undefined = undefined;
-
-  while (inscription.length) {
-    let partial: Chunk[] = [];
-
-    if (txs.length == 0) {
-      partial.push(inscription.shift()!);
-    }
-
-    while (compile(partial).length <= MAX_PAYLOAD_LEN && inscription.length) {
-      partial.push(inscription.shift()!);
-      partial.push(inscription.shift()!);
-    }
-
-    if (compile(partial).length > MAX_PAYLOAD_LEN) {
-      inscription.unshift(partial.pop()!);
-      inscription.unshift(partial.pop()!);
-    }
-
-    const lock = compile([
-      bufferToChunk(publicKey),
-      opcodeToChunk(opcodes.OP_CHECKSIGVERIFY),
-      ...partial.map(() => opcodeToChunk(opcodes.OP_DROP)),
-      opcodeToChunk(opcodes.OP_TRUE),
-    ]);
-
-    const lockHash = belCrypto.hash160(lock);
-
-    const p2shScript = compile([
-      opcodeToChunk(opcodes.OP_HASH160),
-      bufferToChunk(lockHash),
-      opcodeToChunk(opcodes.OP_EQUAL),
-    ]);
-
-    const p2shOutput = {
-      script: p2shScript,
-      value: UTXO_MIN_VALUE,
-    };
-
-    let tx = new Psbt({ network });
-    tx.setVersion(1);
-
-    if (p2shInput) tx.addInput(p2shInput);
-    tx.addOutput(p2shOutput);
-
-    let change = 0;
-    const usedUtxos: ApiUTXO[] = [];
-    const availableUtxos = [...utxos];
-    while (change <= 0 && availableUtxos.length > 0) {
-      tx.addInput({
-        hash: availableUtxos[0].txid,
-        index: availableUtxos[0].vout,
-        sequence: 0xfffffffe,
-        nonWitnessUtxo: Buffer.from(availableUtxos[0].hex, "hex"),
-      });
-      usedUtxos.push(availableUtxos[0]);
-      availableUtxos.shift();
-
-      let fee = 0;
-
-      if (p2shInput === undefined) {
-        fee = gptFeeCalculate(
-          tx.data.inputs.length,
-          tx.data.outputs.length + 1,
-          feeRate
-        );
-      }
-
-      change =
-        usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
-        fee -
-        UTXO_MIN_VALUE;
-      if (change < 0 && availableUtxos.length < 1)
-        throw new Error("Insufficient funds");
-      else if (change > 0)
-        tx.addOutput({ address: fromAddress, value: change });
-    }
-
-    utxos.splice(0, usedUtxos.length);
-
-    const { psbtHex, signatures } = await signPsbtHex(tx.toHex());
-    tx = Psbt.fromHex(psbtHex);
-
-    if (p2shInput !== undefined) {
-      const signature = Buffer.from(signatures[0], "hex");
-
-      const unlockScript = compile([
-        ...lastPartial,
-        bufferToChunk(signature),
-        bufferToChunk(lastLock),
-      ]);
-
-      tx.finalizeInput(0, (_: any, input: any, script: any) => {
-        return {
-          finalScriptSig: unlockScript,
-          finalScriptWitness: undefined,
-        };
-      });
-      tx.data.inputs.forEach((_, idx) => {
-        if (idx) tx.finalizeInput(idx);
-      });
-    } else tx.finalizeAllInputs();
-
-    const transaction = tx.extractTransaction(true);
-    txs.push(transaction.toHex());
-
-    utxos.unshift({
-      txid: tx.extractTransaction(true).getId(),
-      vout: 1,
-      value: change,
-      hex: tx.extractTransaction(true).toHex(),
-    });
-
-    p2shInput = {
-      hash: transaction.getId(),
-      index: 0,
-      nonWitnessUtxo: transaction.toBuffer(),
-      redeemScript: lock,
-    };
-    lastPartial = partial;
-    lastLock = lock;
+  for (let i = 0; i < data.length; i += MAX_CHUNK_LEN) {
+    let end = Math.min(i + MAX_CHUNK_LEN, data.length);
+    scriptChunks.push(data.subarray(i, end));
   }
+  scriptChunks.push(bscript.OPS.OP_ENDIF);
+  const inscriptionScript = bscript.compile(scriptChunks);
 
-  let lastTx = new Psbt({ network });
-  lastTx.setVersion(1);
-  lastTx.addInput(p2shInput);
-  lastTx.addOutput({ address: toAddress, value: UTXO_MIN_VALUE });
-  lastTx.addOutput({
-    address:
-      network.pubKeyHash === networks.testnet.pubKeyHash &&
-      network.scriptHash === networks.testnet.scriptHash
-        ? "EMJCKGLb6qapq2kcgNHgcbkwmSYFkMvcVt"
-        : "BDJqmvvM2Ceh3JcguE3xScBUAGE88nJjcj",
-    value: 1000000,
+  const payment = payments.p2tr({
+    internalPubkey: xOnlyPubKey,
+    redeem: {
+      output: inscriptionScript,
+      redeemVersion: 192,
+    },
+    scriptTree: [
+      {
+        output: inscriptionScript,
+      },
+      {
+        output: inscriptionScript,
+      },
+    ],
+    network,
   });
 
-  let change = 0;
-  const usedUtxos: ApiUTXO[] = [];
-  const availableUtxos = [...utxos];
-  while (change <= 0 && availableUtxos.length > 0) {
-    lastTx.addInput({
-      hash: availableUtxos[0].txid,
-      index: availableUtxos[0].vout,
-      sequence: 0xfffffffe,
-      nonWitnessUtxo: Buffer.from(availableUtxos[0].hex, "hex"),
+  const requiredAmount =
+    (await calcFeeForRevealPsbt(
+      payment,
+      feeRate,
+      toAddress,
+      xOnlyPubKey,
+      signPsbt,
+      network
+    )) + UTXO_MIN_VALUE;
+  const utxos = await getUtxos(requiredAmount);
+
+  const fundPsbt = new Psbt({ network });
+
+  utxos.forEach((utxo) => {
+    fundPsbt.addInput({
+      hash: utxo.txid,
+      index: utxo.vout,
+      witnessUtxo: getWintessUtxo(utxo, addressType, publicKey, network),
+      nonWitnessUtxo: Buffer.from(utxo.hex, "hex"),
     });
-    usedUtxos.push(availableUtxos[0]);
-    availableUtxos.shift();
-
-    const fee = gptFeeCalculate(
-      lastTx.data.inputs.length,
-      lastTx.data.outputs.length + 1,
-      feeRate
-    );
-
-    change =
-      usedUtxos.reduce((accumulator, utxo) => accumulator + utxo.value, 0) -
-      fee -
-      UTXO_MIN_VALUE -
-      1000000;
-    if (change < 0 && availableUtxos.length < 1)
-      throw new Error("Insufficient funds");
-    else if (change > 0)
-      lastTx.addOutput({ address: fromAddress, value: change });
-  }
-
-  const { psbtHex, signatures } = await signPsbtHex(lastTx.toHex());
-  lastTx = Psbt.fromHex(psbtHex);
-
-  const signature = Buffer.from(signatures[0], "hex");
-
-  const unlockScript = compile([
-    ...lastPartial,
-    bufferToChunk(signature),
-    bufferToChunk(lastLock),
-  ]);
-
-  lastTx.finalizeInput(0, (_: any, input: any, script: any) => {
-    return {
-      finalScriptSig: unlockScript,
-      finalScriptWitness: undefined,
-    };
-  });
-  lastTx.data.inputs.forEach((_, idx) => {
-    if (idx) lastTx.finalizeInput(idx);
   });
 
-  const finalizedTx = lastTx.extractTransaction(true);
-  txs.push(finalizedTx.toHex());
+  fundPsbt.addOutput({
+    address: payment.address!,
+    value: requiredAmount,
+  });
+  fundPsbt.addOutput({
+    address: fromAddress,
+    value:
+      utxos.reduce((acc, val) => (acc += val.value), 0) -
+      requiredAmount -
+      (await calcFeeForFundPsbt(fundPsbt.clone(), feeRate, signPsbt)),
+  });
+
+  const signedFundPsbt = Psbt.fromBase64(await signPsbt(fundPsbt.toBase64()));
+  const fundTx = signedFundPsbt.extractTransaction(true);
+  txs.push(fundTx.toHex());
+
+  const revealPsbt = new Psbt({ network });
+  revealPsbt.addInput({
+    hash: fundTx.getId(),
+    index: 0,
+    witnessUtxo: {
+      script: payment.output!,
+      value: requiredAmount,
+    },
+    tapLeafScript: [
+      {
+        leafVersion: 192,
+        script: inscriptionScript,
+        controlBlock: payment.witness![payment.witness!.length - 1],
+      },
+    ],
+    tapInternalKey: xOnlyPubKey,
+  });
+  revealPsbt.addOutput({
+    address: toAddress,
+    value: UTXO_MIN_VALUE,
+  });
+
+  const signedRevealpsbt = Psbt.fromBase64(
+    await signPsbt(revealPsbt.toBase64(), true)
+  );
+  const revealTx = signedRevealpsbt.extractTransaction(true);
+  txs.push(revealTx.toHex());
 
   return txs;
 }

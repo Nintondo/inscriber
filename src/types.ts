@@ -41,9 +41,19 @@ export interface InscribeParams {
   data: Buffer;
   feeRate: number;
   network: Network;
-  utxos: ApiUTXO[];
   publicKey: Buffer;
-  signPsbtHex: (
-    psbtHex: string
-  ) => Promise<{ psbtHex: string; signatures: (string | undefined)[] }>;
+  getUtxos: (amount: number) => Promise<ApiUTXO[]>;
+  signPsbt: (
+    psbtBase64: string,
+    disableTweakSigner?: boolean
+  ) => Promise<string>;
+}
+
+export enum AddressType {
+  P2PKH = 0,
+  P2WPKH = 1,
+  P2TR = 2,
+  P2SH_P2WPKH = 3,
+  M44_P2WPKH = 4,
+  M44_P2TR = 5,
 }
