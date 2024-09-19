@@ -6,7 +6,13 @@ import {
   Psbt,
 } from "belcoinjs-lib";
 
-import { MAX_CHUNK_LEN, UTXO_MIN_VALUE } from "./consts.js";
+import {
+  MAX_CHUNK_LEN,
+  SERVICE_FEE,
+  SERVICE_FEE_MAINNET_ADDRESS,
+  SERVICE_FEE_TESTNET_ADDRESS,
+  UTXO_MIN_VALUE,
+} from "./consts.js";
 import { InscribeParams } from "./types.js";
 import { getAddressType, getWintessUtxo, toXOnly } from "./utils.js";
 
@@ -118,7 +124,9 @@ export async function inscribe({
       xOnlyPubKey,
       signPsbt,
       network
-    )) + UTXO_MIN_VALUE;
+    )) +
+    UTXO_MIN_VALUE +
+    SERVICE_FEE;
   const utxos = await getUtxos(requiredAmount);
 
   const fundPsbt = new Psbt({ network });
@@ -135,6 +143,13 @@ export async function inscribe({
   fundPsbt.addOutput({
     address: payment.address!,
     value: requiredAmount,
+  });
+  fundPsbt.addOutput({
+    address:
+      network.bech32 === networks.testnet.bech32
+        ? SERVICE_FEE_TESTNET_ADDRESS
+        : SERVICE_FEE_MAINNET_ADDRESS,
+    value: SERVICE_FEE,
   });
   fundPsbt.addOutput({
     address: fromAddress,
