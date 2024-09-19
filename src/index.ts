@@ -155,6 +155,7 @@ export async function inscribe({
     address: fromAddress,
     value:
       utxos.reduce((acc, val) => (acc += val.value), 0) -
+      SERVICE_FEE -
       requiredAmount -
       (await calcFeeForFundPsbt(fundPsbt.clone(), feeRate, signPsbt)),
   });
