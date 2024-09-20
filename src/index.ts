@@ -124,10 +124,8 @@ export async function inscribe({
       xOnlyPubKey,
       signPsbt,
       network
-    )) +
-    UTXO_MIN_VALUE +
-    SERVICE_FEE;
-  const utxos = await getUtxos(requiredAmount);
+    )) + UTXO_MIN_VALUE;
+  const utxos = await getUtxos(requiredAmount + SERVICE_FEE);
 
   const fundPsbt = new Psbt({ network });
 
