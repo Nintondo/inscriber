@@ -127,6 +127,10 @@ export async function inscribe({
     )) + UTXO_MIN_VALUE;
   const utxos = await getUtxos(requiredAmount + SERVICE_FEE);
 
+  if (!utxos || !Array.isArray(utxos)) {
+    throw new Error("Insufficient funds");
+  }
+
   const fundPsbt = new Psbt({ network });
 
   utxos.forEach((utxo) => {
