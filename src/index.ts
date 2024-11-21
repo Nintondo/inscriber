@@ -131,6 +131,12 @@ export async function inscribe({
     throw new Error("Insufficient funds");
   }
 
+  if (utxos.length > 500) {
+    throw new Error("Too many UTXOs. You need to consolidate them first.");
+  }
+
+  let totalValue = utxos.reduce((acc, val) => (acc += val.value), 0);
+
   const fundPsbt = new Psbt({ network });
 
   utxos.forEach((utxo) => {
@@ -153,14 +159,19 @@ export async function inscribe({
         : SERVICE_FEE_MAINNET_ADDRESS,
     value: SERVICE_FEE,
   });
-  fundPsbt.addOutput({
-    address: fromAddress,
-    value:
-      utxos.reduce((acc, val) => (acc += val.value), 0) -
-      SERVICE_FEE -
-      requiredAmount -
-      (await calcFeeForFundPsbt(fundPsbt.clone(), feeRate, signPsbt)),
-  });
+
+  const txFee = await calcFeeForFundPsbt(fundPsbt.clone(), feeRate, signPsbt);
+
+  const change = totalValue - SERVICE_FEE - requiredAmount - txFee;
+
+  if (change >= 1000) {
+    fundPsbt.addOutput({
+      address: fromAddress,
+      value: change,
+    });
+  } else if (change < 0) {
+    throw new Error("Insufficient funds");
+  }
 
   const signedFundPsbt = Psbt.fromBase64(await signPsbt(fundPsbt.toBase64()));
   const fundTx = signedFundPsbt.extractTransaction(true);
